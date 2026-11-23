@@ -1,0 +1,47 @@
+rules_version = '2';
+
+// Regras do talão digital de pedidos (Cloud Firestore).
+// Só quem tem um documento na coleção "membros" (ID do documento = UID do usuário) lê e grava.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function membro() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/membros/$(request.auth.uid));
+    }
+
+    function gravacaoValida() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['numero', 'json', 'atualizadoEm', 'excluido', 'servidorEm', 'por'])
+        && d.json is string && d.json.size() < 900000
+        && d.atualizadoEm is int
+        && d.excluido is bool
+        && d.servidorEm == request.time
+        && d.por == request.auth.token.email;
+    }
+
+    // Nunca aceita uma versão mais antiga do que a que já está na nuvem.
+    function naoVoltaNoTempo() {
+      return request.resource.data.atualizadoEm >= resource.data.atualizadoEm;
+    }
+
+    match /membros/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow list, write: if false;
+    }
+
+    match /pedidos/{id} {
+      allow read: if membro();
+      allow create: if membro() && gravacaoValida() && request.resource.data.numero is int;
+      allow update: if membro() && gravacaoValida() && request.resource.data.numero is int && naoVoltaNoTempo();
+      allow delete: if false; // excluir no app só marca "excluido": o backup guarda tudo
+    }
+
+    match /ajustes/{id} {
+      allow read: if membro();
+      allow create: if membro() && gravacaoValida();
+      allow update: if membro() && gravacaoValida() && naoVoltaNoTempo();
+      allow delete: if false;
+    }
+  }
+}
