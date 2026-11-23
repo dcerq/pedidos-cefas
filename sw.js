@@ -1,5 +1,5 @@
 /* Service worker: deixa o app abrir sem internet. Os pedidos ficam no aparelho (IndexedDB), não aqui. */
-const CACHE = 'talao-08d35b7f27';
+const CACHE = 'talao-cf8e106d05';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', e => {
