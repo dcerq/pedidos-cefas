@@ -200,6 +200,7 @@ input::placeholder, textarea::placeholder { color: var(--ph); opacity: 1; }
 /* recebido por */
 .pad-receb .pr-dia { flex: 0 0 auto; }
 .pad-receb .pad-split { grid-template-columns: minmax(0, 1fr) 230px; }
+.dv-dica { font-size: 13px; line-height: 1.45; margin: 2px 0 8px; }
 .pad-sig { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--line); }
 .sig-img { display: block; max-height: 60px; width: auto; background: #fff; border-bottom: 1px solid var(--ink); }
 
@@ -415,6 +416,8 @@ fieldset.box > legend + * { clear: both; }
   z-index: 200; width: max-content; max-width: calc(100% - 32px); box-shadow: 0 10px 24px -10px rgba(0, 0, 0, .5);
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+/* Com uma janela aberta, o aviso sobe para não cobrir os botões dela. */
+body:has(.modal-wrap) .toast { top: calc(16px + env(safe-area-inset-top)); bottom: auto; }
 .toast.err { background: var(--red); }
 @media (prefers-reduced-motion: reduce) { .modal-wrap, .toast { transition: none; } }
 
@@ -1230,19 +1233,21 @@ const DOC = (() => {
       const base = y + H - 17;
       const w1 = lab('RECEBIDO POR:', X0 + 10, base);
       const lx1 = X0 + 10 + w1 + 6, lx2 = X0 + CW * 0.66;
-      if (o.assinatura && o.assinatura.w && o.assinatura.h) {
+      // Antes da entrega fica em branco, como no talão: dá para imprimir e assinar à caneta.
+      const ent = o.status === 'entregue';
+      if (ent && o.assinatura && o.assinatura.w && o.assinatura.h) {
         const maxH = H - 22, maxW = (lx2 - lx1) * 0.8, ar = o.assinatura.w / o.assinatura.h;
         let h = maxH, w = h * ar;
         if (w > maxW) { w = maxW; h = w / ar; }
         ops.push({ t: 'img', key: 'sig', x: lx1 + 8, y: base + 1 - h, w, h });
         if (o.recebidoPor) T(ellipsize(o.recebidoPor, 7.5, false, lx2 - lx1), lx2, base + 11, 7.5, { color: C.muted, align: 'right' });
-      } else if (o.recebidoPor) {
+      } else if (ent && o.recebidoPor) {
         T(ellipsize(o.recebidoPor, 11, false, lx2 - lx1 - 8), lx1 + 4, base - 2.5, 11);
       }
       L(lx1, base + 1.5, lx2, base + 1.5, { color: C.ink, lw: 0.7 });
       const dx = X0 + CW * 0.7;
       const w2 = lab('DIA:', dx, base);
-      if (o.recebidoEm) T(U.fmtDate(o.recebidoEm), dx + w2 + 8, base - 0.5, 11, { bold: true });
+      if (ent && o.recebidoEm) T(U.fmtDate(o.recebidoEm), dx + w2 + 8, base - 0.5, 11, { bold: true });
       else T('____/____/________', dx + w2 + 8, base, 9, { color: C.rule });
     }
 
@@ -2597,13 +2602,13 @@ const NUVEM = (() => {
           <div class="tt-row tt-falta"><span>Falta pagar</span><output id="t-falta">0,00</output></div>
         </div>
       </section>
-      <section class="pad-box pad-receb">
+      ${d.status === 'entregue' ? `<section class="pad-box pad-receb">
         <div class="pad-row pad-split">
           <label><span>Recebido por:</span><input name="recebidoPor" autocapitalize="words" placeholder="Nome de quem recebeu" value="${esc(d.recebidoPor)}"></label>
           <label class="pr-dia"><span>Dia:</span><input type="date" name="recebidoEm" value="${esc(d.recebidoEm)}"></label>
         </div>
         <div class="pad-sig" id="sig-row">${assinaturaHtml(d)}</div>
-      </section>
+      </section>` : ''}
     </article>`;
   }
 
@@ -2917,7 +2922,7 @@ const NUVEM = (() => {
           <label class="fld"><span>Recebido por</span><input id="dv-n" value="${esc(o.recebidoPor || (o.cliente && o.cliente.nome) || '')}" autocapitalize="words"></label>
           <label class="fld"><span>Dia</span><input id="dv-d" type="date" value="${esc(o.recebidoEm || U.isoLocal())}"></label>
         </div>
-        <div class="fld"><span>Assinatura (opcional)</span><div class="sigpad"><canvas id="dv-c" aria-label="Área para assinar"></canvas></div><button type="button" class="link" id="dv-clear">Limpar assinatura</button></div>`,
+        <div class="fld"><span>Assinatura (opcional)</span><p class="muted dv-dica">Só se a pessoa estiver aí com você: ela assina com o dedo no quadro. Se a entrega foi por motoboy ou transportadora, deixe em branco.</p><div class="sigpad"><canvas id="dv-c" aria-label="Área para assinar"></canvas></div><button type="button" class="link" id="dv-clear">Limpar assinatura</button></div>`,
       actions: [{ label: 'Cancelar', value: null }, {
         label: 'Confirmar entrega', kind: 'primary', onClick: w => {
           const n = $('#dv-n', w).value.trim();
@@ -3469,7 +3474,7 @@ const NUVEM = (() => {
       return [U.fmtNum(o.numero), U.fmtDate(o.data), c.nome, U.fmtPhone(c.telefone), c.email, c.endereco,
         (o.itens || []).filter(validItem).map(i => `${U.fmtQty(i.qtd)} x ${i.desc} (${U.money2(i.unit)})`).join(' | '),
         U.money2(t.sub), U.money2(t.desc), U.money2(t.total), U.money2(Math.min(t.pago, t.total)), U.money2(t.rest),
-        o.formaPagamento, U.fmtDate(o.prazo), (U.STATUS[o.status] || {}).label, o.recebidoPor, U.fmtDate(o.recebidoEm), String(o.obs || '').replace(/\s+/g, ' ')];
+        o.formaPagamento, U.fmtDate(o.prazo), (U.STATUS[o.status] || {}).label, o.status === 'entregue' ? o.recebidoPor : '', o.status === 'entregue' ? U.fmtDate(o.recebidoEm) : '', String(o.obs || '').replace(/\s+/g, ' ')];
     });
     const csv = '﻿' + [head, ...rows].map(r => r.map(cell).join(';')).join('\r\n');
     downloadFile(new File([csv], `pedidos-${U.isoLocal()}.csv`, { type: 'text/csv;charset=utf-8' }));
